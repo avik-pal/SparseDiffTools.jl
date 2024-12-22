@@ -212,7 +212,7 @@ function (L::FwdModeAutoDiffVecProd)(dv, v, p, t)
 end
 
 function Base.resize!(L::FwdModeAutoDiffVecProd, n::Integer)
-    static_hasmethod(resize!, typeof((L.f, n))) && resize!(L.f, n)
+    hasmethod(resize!, typeof((L.f, n))) && resize!(L.f, n)
     resize!(L.u, n)
 
     for v in L.cache
@@ -268,8 +268,9 @@ function JacVec(f, u::AbstractArray, p = nothing, t = nothing; fu = nothing,
     cache, vecprod, vecprod! = if autodiff isa AutoFiniteDiff
         cache1 = similar(fu)
         cache2 = similar(u)
+        cache3 = similar(u)
 
-        (cache1, cache2), num_jacvec, num_jacvec!
+        (cache1, cache2, cache3), num_jacvec, num_jacvec!
     elseif autodiff isa AutoForwardDiff
         cache1 = Dual{
             typeof(ForwardDiff.Tag(tag, eltype(u))), eltype(u), 1
@@ -304,7 +305,7 @@ function HesVec(f, u::AbstractArray, p = nothing, t = nothing;
 
         (cache1, cache2, cache3), numauto_hesvec, numauto_hesvec!
     elseif autodiff isa AutoZygote
-        @assert static_hasmethod(autoback_hesvec, typeof((f, u, u))) "To use AutoZygote() AD, first load Zygote with `using Zygote`, or `import Zygote`"
+        @assert hasmethod(autoback_hesvec, typeof((f, u, u))) "To use AutoZygote() AD, first load Zygote with `using Zygote`, or `import Zygote`"
 
         cache1 = Dual{
             typeof(ForwardDiff.Tag(tag, eltype(u))), eltype(u), 1
@@ -316,8 +317,8 @@ function HesVec(f, u::AbstractArray, p = nothing, t = nothing;
         error("Set autodiff to either AutoForwardDiff(), AutoZygote(), or AutoFiniteDiff()")
     end
 
-    outofplace = static_hasmethod(f, typeof((u,)))
-    isinplace = static_hasmethod(f, typeof((u,)))
+    outofplace = hasmethod(f, typeof((u,)))
+    isinplace = hasmethod(f, typeof((u,)))
 
     if !(isinplace) & !(outofplace)
         error("$f must have signature f(u).")
@@ -347,8 +348,8 @@ function HesVecGrad(f, u::AbstractArray, p = nothing, t = nothing;
         error("Set autodiff to either AutoForwardDiff(), or AutoFiniteDiff()")
     end
 
-    outofplace = static_hasmethod(f, typeof((u,)))
-    isinplace = static_hasmethod(f, typeof((u, u)))
+    outofplace = hasmethod(f, typeof((u,)))
+    isinplace = hasmethod(f, typeof((u, u)))
 
     if !(isinplace) & !(outofplace)
         error("$f must have signature f(u), or f(du, u).")

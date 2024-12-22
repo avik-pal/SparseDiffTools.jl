@@ -4,10 +4,10 @@ using ADTypes, SparseDiffTools, PolyesterForwardDiff, UnPack, Random, SparseArra
 import ForwardDiff
 import SparseDiffTools: AbstractMaybeSparseJacobianCache, AbstractMaybeSparsityDetection,
                         ForwardColorJacCache, NoMatrixColoring, sparse_jacobian_cache,
+                        sparse_jacobian_cache_aux,
                         sparse_jacobian!,
                         sparse_jacobian_static_array, __standard_tag, __chunksize,
-                        polyesterforwarddiff_color_jacobian,
-                        polyesterforwarddiff_color_jacobian!
+                        polyesterforwarddiff_color_jacobian
 
 struct PolyesterForwardDiffJacobianCache{CO, CA, J, FX, X} <:
        AbstractMaybeSparseJacobianCache
@@ -18,8 +18,8 @@ struct PolyesterForwardDiffJacobianCache{CO, CA, J, FX, X} <:
     x::X
 end
 
-function sparse_jacobian_cache(
-        ad::Union{AutoSparsePolyesterForwardDiff, AutoPolyesterForwardDiff},
+function sparse_jacobian_cache_aux(::ADTypes.ForwardMode,
+        ad::Union{AutoSparse{<:AutoPolyesterForwardDiff}, AutoPolyesterForwardDiff},
         sd::AbstractMaybeSparsityDetection, f::F, x; fx = nothing) where {F}
     coloring_result = sd(ad, f, x)
     fx = fx === nothing ? similar(f(x)) : fx
@@ -27,7 +27,7 @@ function sparse_jacobian_cache(
         cache = __chunksize(ad, x)
         jac_prototype = nothing
     else
-        tag = __standard_tag(nothing, x)
+        tag = __standard_tag(nothing, f, x)
         # Colored ForwardDiff passes `tag` directly into Dual so we need the `typeof`
         cache = ForwardColorJacCache(f, x, __chunksize(ad); coloring_result.colorvec,
             dx = fx, sparsity = coloring_result.jacobian_sparsity, tag = typeof(tag))
@@ -36,8 +36,8 @@ function sparse_jacobian_cache(
     return PolyesterForwardDiffJacobianCache(coloring_result, cache, jac_prototype, fx, x)
 end
 
-function sparse_jacobian_cache(
-        ad::Union{AutoSparsePolyesterForwardDiff, AutoPolyesterForwardDiff},
+function sparse_jacobian_cache_aux(::ADTypes.ForwardMode,
+        ad::Union{AutoSparse{<:AutoPolyesterForwardDiff}, AutoPolyesterForwardDiff},
         sd::AbstractMaybeSparsityDetection, f!::F, fx, x) where {F}
     coloring_result = sd(ad, f!, fx, x)
     if coloring_result isa NoMatrixColoring
@@ -47,7 +47,7 @@ function sparse_jacobian_cache(
         @warn """Currently PolyesterForwardDiff does not support sparsity detection
                  natively for inplace functions. Falling back to using
                 ForwardDiff.jl""" maxlog=1
-        tag = __standard_tag(nothing, x)
+        tag = __standard_tag(nothing, f!, x)
         # Colored ForwardDiff passes `tag` directly into Dual so we need the `typeof`
         cache = ForwardColorJacCache(f!, x, __chunksize(ad); coloring_result.colorvec,
             dx = fx, sparsity = coloring_result.jacobian_sparsity, tag = typeof(tag))
@@ -78,7 +78,7 @@ end
 
 ## Approximate Sparsity Detection
 function (alg::ApproximateJacobianSparsity)(
-        ad::AutoSparsePolyesterForwardDiff, f::F, x; fx = nothing, kwargs...) where {F}
+        ad::AutoSparse{<:AutoPolyesterForwardDiff}, f::F, x; fx = nothing, kwargs...) where {F}
     @unpack ntrials, rng = alg
     fx = fx === nothing ? f(x) : fx
     ck = __chunksize(ad, x)
@@ -95,7 +95,7 @@ function (alg::ApproximateJacobianSparsity)(
 end
 
 function (alg::ApproximateJacobianSparsity)(
-        ad::AutoSparsePolyesterForwardDiff, f::F, fx, x;
+        ad::AutoSparse{<:AutoPolyesterForwardDiff}, f::F, fx, x;
         kwargs...) where {F}
     @unpack ntrials, rng = alg
     ck = __chunksize(ad, x)
